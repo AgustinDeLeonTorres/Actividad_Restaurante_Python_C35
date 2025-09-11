@@ -1,48 +1,6 @@
-"""
-Módulo de gestión de inventario para el restaurante
-Responsable: Equipo de inventario
-"""
-
-import json
-import os
-
-
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-INVENTARIO_FILE = os.path.join(BASE_DIR, '..', 'data', 'inventario.json')
-
-def cargar_inventario():
-    """
-    Carga el inventario desde el archivo JSON
-    Retorna: diccionario con el inventario
-    """
-    try:
-        with open(INVENTARIO_FILE, 'r') as file:
-            return json.load(file)
-    except FileNotFoundError:
-        print("Error: Archivo de inventario no encontrado.")
-        return {}
-    except json.JSONDecodeError:
-        print("Error: Archivo de inventario corrupto.")
-        return {}
-
-def guardar_inventario(inventario):
-    """
-    Guarda el inventario en el archivo JSON
-    """
-    try:
-        # Asegurar que el directorio existe
-        os.makedirs(os.path.dirname(INVENTARIO_FILE), exist_ok=True)
-        
-        with open(INVENTARIO_FILE, 'w') as file:
-            json.dump(inventario, file, indent=4)
-        return True
-    except Exception as e:
-        print(f"Error guardando inventario: {e}")
-        return False
-
 def inicializar_inventario():
     """
-    Inicializa el inventario con valores por defecto si no existe
+    Inicializa el inventario con valores por defecto
     """
     inventario_default = {
         "ingredientes": {
@@ -91,67 +49,102 @@ def inicializar_inventario():
             }
         }
     }
-    
-    # Verificar si el archivo ya existe
-    if not os.path.exists(INVENTARIO_FILE):
-        guardar_inventario(inventario_default)
-        print("Inventario inicializado con valores por defecto.")
-    
-    return cargar_inventario()
+    return inventario_default
 
-def verificar_disponibilidad(producto_id, cantidad=1):
+def mostrar_inventario(inventario):
+    """
+    Muestra el estado actual del inventario de forma organizada
+    """
+    print("\n" + "="*50)
+    print("          INVENTARIO ACTUAL")
+    print("="*50)
+    
+    print("\n--- INGREDIENTES ---")
+    for ingrediente_id, datos in inventario["ingredientes"].items():
+        print(f"{ingrediente_id}: {datos['cantidad']} {datos['unidad']}")
+    
+    print("\n--- PRODUCTOS DISPONIBLES ---")
+    for producto_id, datos in inventario["productos"].items():
+        print(f"{producto_id}: {datos['nombre']} - ${datos['precio']}")
+    
+    print("="*50)
+
+def verificar_disponibilidad(producto_id, cantidad, inventario):
     """
     Verifica si hay suficientes ingredientes para un producto
+    Returns: (True, None) si hay stock, (False, ingrediente_faltante) si no hay
     """
-    inventario = cargar_inventario()
-    
     if producto_id not in inventario["productos"]:
-        print(f"Error: Producto {producto_id} no encontrado.")
-        return False
+        return False, "Producto no existe en el menú"
     
     producto = inventario["productos"][producto_id]
     
     for ingrediente, cantidad_necesaria in producto["ingredientes"].items():
+        # Verificar si el ingrediente existe en inventario
         if ingrediente not in inventario["ingredientes"]:
-            print(f"Error: Ingrediente {ingrediente} no encontrado en inventario.")
-            return False
+            return False, f"Ingrediente '{ingrediente}' no existe en inventario"
         
-        cantidad_total_necesaria = cantidad_necesaria * cantidad
-        if inventario["ingredientes"][ingrediente]["cantidad"] < cantidad_total_necesaria:
-            print(f"Insuficiente {ingrediente} para preparar {cantidad} {producto_id}")
-            return False
+        # Verificar si hay suficiente cantidad
+        inventario_actual = inventario["ingredientes"][ingrediente]["cantidad"]
+        if inventario_actual < (cantidad_necesaria * cantidad):
+            return False, ingrediente
     
-    return True
+    return True, None
 
-def actualizar_inventario(producto_id, cantidad=1):
+def actualizar_inventario(producto_id, cantidad, inventario):
     """
-    Actualiza el inventario después de preparar un producto
+    Descuesta los ingredientes utilizados para un pedido
     """
-    if not verificar_disponibilidad(producto_id, cantidad):
-        return False
-    
-    inventario = cargar_inventario()
     producto = inventario["productos"][producto_id]
     
     for ingrediente, cantidad_necesaria in producto["ingredientes"].items():
         inventario["ingredientes"][ingrediente]["cantidad"] -= cantidad_necesaria * cantidad
-    
-    return guardar_inventario(inventario)
 
-def mostrar_inventario():
+def obtener_menu(inventario):
     """
-    Muestra el estado actual del inventario
+    Devuelve el menú en formato amigable para mostrar al cliente
     """
-    inventario = cargar_inventario()
-    
-    print("\n--- INVENTARIO ACTUAL ---")
-    print("INGREDIENTES:")
-    for ingrediente, info in inventario["ingredientes"].items():
-        print(f"  {ingrediente}: {info['cantidad']} {info['unidad']}")
-    
-    print("\nPRODUCTOS DISPONIBLES:")
-    for producto_id, info in inventario["productos"].items():
-        print(f"  {producto_id}: {info['nombre']} - ${info['precio']}")
+    menu = []
+    for producto_id, datos in inventario["productos"].items():
+        menu.append({
+            "id": producto_id,
+            "nombre": datos["nombre"],
+            "precio": datos["precio"]
+        })
+    return menu
 
-# Inicializar inventario cuando se importe el módulo
-inventario = inicializar_inventario()
+def mostrar_menu(inventario):
+    """
+    Muestra el menú al cliente de forma atractiva
+    """
+    print("\n" + "="*50)
+    print("           MENÚ DEL RESTAURANTE")
+    print("="*50)
+    
+    for producto_id, datos in inventario["productos"].items():
+        print(f"{producto_id}: {datos['nombre']} - ${datos['precio']}")
+    
+    print("="*50)
+
+# Función para probar el módulo
+if __name__ == "__main__":
+    
+    inventario = inicializar_inventario()
+    mostrar_inventario(inventario)
+    mostrar_menu(inventario)
+    
+    
+    producto_test = "hamburguesa_clasica"
+    cantidad_test = 3
+    
+    disponible, mensaje = verificar_disponibilidad(producto_test, cantidad_test, inventario)
+    print(f"\n¿Hay {cantidad_test} {producto_test}? {'Sí' if disponible else 'No'}")
+    if not disponible:
+        print(f"Razón: {mensaje}")
+    
+   
+    if disponible:
+        print(f"\nPreparando {cantidad_test} {producto_test}...")
+        actualizar_inventario(producto_test, cantidad_test, inventario)
+        print("Inventario actualizado:")
+        mostrar_inventario(inventario)
